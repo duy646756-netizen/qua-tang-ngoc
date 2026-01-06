@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gửi Ngọc 💕</title>
+
+<style>
+body{
+    margin:0;
+    background:radial-gradient(circle at top,#ffb6c1,#ff69b4,#000);
+    color:white;
+    text-align:center;
+    font-family:'Segoe UI',sans-serif;
+    overflow:hidden;
+}
+
+/* ===== MÀN HÌNH KHÓA ===== */
+#lock{
+    position:fixed;
+    inset:0;
+    background:#000;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    z-index:9999;
+}
+#lock h2{color:pink}
+#lock input{
+    padding:12px;
+    font-size:18px;
+    border-radius:15px;
+    border:none;
+    text-align:center;
+}
+#lock button{
+    margin-top:15px;
+    padding:10px 30px;
+    font-size:18px;
+    border:none;
+    border-radius:20px;
+    background:pink;
+    cursor:pointer;
+}
+#err{color:red;display:none}
+
+/* ===== LED ===== */
+#led{
+    margin-top:60px;
+    font-size:36px;
+    font-weight:bold;
+    animation:led 2s linear infinite;
+}
+@keyframes led{
+    0%{color:red}
+    20%{color:yellow}
+    40%{color:lime}
+    60%{color:cyan}
+    80%{color:magenta}
+    100%{color:red}
+}
+
+/* ===== NÚT ===== */
+#btn{
+    margin-top:25px;
+    font-size:22px;
+    color:#00f;
+    text-decoration:underline;
+    cursor:pointer;
+}
+
+/* ===== HỘP QUÀ ===== */
+#gift{
+    width:220px;
+    margin:50px auto;
+    display:none;
+    cursor:pointer;
+    animation:shake 2s infinite;
+}
+@keyframes shake{
+    0%{transform:rotate(0)}
+    25%{transform:rotate(2deg)}
+    50%{transform:rotate(0)}
+    75%{transform:rotate(-2deg)}
+    100%{transform:rotate(0)}
+}
+
+/* ===== GẤU + ẢNH ===== */
+#bear,#photo{display:none}
+#bear{width:260px;margin-top:20px}
+#photo{
+    width:260px;
+    border-radius:20px;
+    box-shadow:0 0 20px rgba(255,255,255,.6);
+}
+
+/* ===== THIỆP ===== */
+#card{
+    display:none;
+    background:white;
+    color:#ff4081;
+    width:340px;
+    margin:20px auto;
+    padding:20px;
+    border-radius:20px;
+    font-size:18px;
+    box-shadow:0 10px 25px rgba(0,0,0,.4);
+}
+
+/* ===== BÓNG BAY ===== */
+.balloon{
+    position:absolute;
+    bottom:-60px;
+    font-size:34px;
+    animation:fly 6s linear forwards;
+}
+@keyframes fly{
+    to{
+        transform:translateY(-120vh);
+        opacity:0;
+    }
+}
+.pop{
+    animation:pop 0.4s forwards;
+}
+@keyframes pop{
+    to{
+        transform:scale(1.8);
+        opacity:0;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<!-- 🔐 KHÓA -->
+<div id="lock">
+    <h2>🔐 Nhập mật khẩu</h2>
+    <input id="pass" type="password" placeholder="Mật khẩu">
+    <button onclick="unlock()">Mở quà 💕</button>
+    <p id="err">Sai mật khẩu rồi 😢</p>
+</div>
+
+<!-- NỘI DUNG -->
+<div id="led">Xin chào em Ngọc 💕</div>
+<div id="btn">Nhấp vào đây</div>
+
+<img id="gift" src="hop-qua.png">
+<img id="bear" src="gau-bong.png">
+<img id="photo" src="anh-cuoi.jpg">
+
+<div id="card">
+💕 <b>Ngọc yêu</b> 💕<br><br>
+Kể từ ngày <b>21/12/2019</b><br>
+Anh đã biết trái tim mình thuộc về em.<br><br>
+Anh yêu em nhiều lắm ❤️
+</div>
+
+<audio id="music" loop>
+  <source src="https://cdn.pixabay.com/audio/2022/03/15/audio_2c3b9d7a7f.mp3">
+</audio>
+
+<script>
+/* ===== MẬT KHẨU ===== */
+const PASSWORD = "21122019"; // ✅ MẬT KHẨU BẠN YÊU CẦU
+
+function unlock(){
+    const p=document.getElementById("pass").value;
+    if(p===PASSWORD){
+        document.getElementById("lock").style.display="none";
+    }else{
+        document.getElementById("err").style.display="block";
+    }
+}
+
+const btn=document.getElementById("btn");
+const gift=document.getElementById("gift");
+const bear=document.getElementById("bear");
+const card=document.getElementById("card");
+const music=document.getElementById("music");
+const photo=document.getElementById("photo");
+
+btn.onclick=()=>{
+    btn.style.display="none";
+    gift.style.display="block";
+};
+
+gift.onclick=()=>{
+    gift.style.transition="0.8s";
+    gift.style.transform="scale(0)";
+    setTimeout(()=>{
+        gift.style.display="none";
+        bear.style.display="block";
+        photo.style.display="block";
+        card.style.display="block";
+        music.play();
+        balloons();   // 🎈 GỌI BÓNG BAY
+    },800);
+};
+
+function balloons(){
+    for(let i=0;i<60;i++){   // 👈 số bóng bay (càng lớn càng dày)
+        let b=document.createElement("div");
+        b.className="balloon";
+        b.innerHTML="🎈";
+        b.style.left=Math.random()*innerWidth+"px";
+        b.style.animationDuration=(4+Math.random()*3)+"s";
+
+        b.onclick=()=>{
+            b.classList.add("pop");
+            setTimeout(()=>b.remove(),400);
+        };
+
+        document.body.appendChild(b);
+        setTimeout(()=>b.remove(),7000);
+    }
+}
+</script>
+
+</body>
+</html>
