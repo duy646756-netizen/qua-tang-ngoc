@@ -1,0 +1,19 @@
+# Tep sinh ra khi bien dich Visual Studio
+Debug/
+Release/
+ipch/
+.vs/
+*.aps
+*.ncb
+*.opensdf
+*.sdf
+*.suo
+*.user
+*.obj
+*.pch
+*.pdb
+*.ilk
+*.idb
+*.exe
+*.res
+*.tlog
