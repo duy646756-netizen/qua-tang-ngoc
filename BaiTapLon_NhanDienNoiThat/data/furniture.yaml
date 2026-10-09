@@ -1,21 +1,22 @@
 # ============================================================================
-# Cấu hình bộ dữ liệu cho train.py và evaluate.py
+# Cau hinh bo du lieu cho train.py va evaluate.py
+# (chu thich de khong dau de moi cong cu deu doc duoc, khong lo loi bang ma)
 #
-# Cấu trúc thư mục cần chuẩn bị (xem README mục 6):
+# Cau truc thu muc can chuan bi (xem README muc 6):
 #   data/
 #     images/train/anh001.jpg ...      labels/train/anh001.txt ...
 #     images/val/anh900.jpg  ...       labels/val/anh900.txt  ...
 #
-# Mỗi tệp .txt là nhãn của ảnh cùng tên, mỗi dòng một vật thể:
-#   <id_lop> <x_tam> <y_tam> <chieu_rong> <chieu_cao>      (giá trị 0–1)
+# Moi tep .txt la nhan cua anh cung ten, moi dong mot vat the:
+#   <id_lop> <x_tam> <y_tam> <chieu_rong> <chieu_cao>      (gia tri 0-1)
 # ============================================================================
 
-path: .            # thư mục gốc, tính từ vị trí của tệp yaml này
+path: .            # thu muc goc, tinh tu vi tri cua tep yaml nay
 train: images/train
 val: images/val
 
-# Danh sách lớp. 16 lớp đầu giữ nguyên tên COCO để tận dụng mô hình có sẵn,
-# 7 lớp cuối là phần bổ sung mà COCO không có — đây là giá trị thêm vào của bài.
+# Danh sach lop. 16 lop dau giu nguyen ten COCO de tan dung mo hinh co san,
+# 7 lop cuoi la phan bo sung ma COCO khong co - day la gia tri them vao cua bai.
 names:
   0: bench
   1: chair

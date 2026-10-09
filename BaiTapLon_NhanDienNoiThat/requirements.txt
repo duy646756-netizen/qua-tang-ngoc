@@ -1,8 +1,9 @@
-# Thư viện cần cài. Cài bằng:  pip install -r requirements.txt
+# Cai bang:  python -m pip install -r requirements.txt
+# (Chu thich de khong dau de pip ban cu doc duoc tren Windows)
 ultralytics>=8.3.0
 opencv-python>=4.8.0
 pillow>=10.0.0
 numpy>=1.24.0
-# torch và torchvision được ultralytics tự cài kèm.
-# Nếu máy có card đồ hoạ NVIDIA, cài bản CUDA để chạy nhanh hơn nhiều:
+# torch va torchvision duoc ultralytics tu cai kem.
+# May co card do hoa NVIDIA thi cai ban CUDA de chay nhanh hon nhieu:
 #   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121

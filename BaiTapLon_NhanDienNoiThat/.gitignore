@@ -1,27 +1,27 @@
-# Môi trường ảo Python
+# Moi truong ao Python
 venv/
 .venv/
 env/
 
-# Tệp tạm của Python
+# Tep tam cua Python
 __pycache__/
 *.py[cod]
 *.egg-info/
 
-# Kết quả chạy và huấn luyện
+# Ket qua chay va huan luyen
 runs/
 ket_qua/
 *.csv
 
-# Trọng số mô hình (tải lại được, không nên đẩy lên git vì nặng)
+# Trong so mo hinh (tai lai duoc, khong nen day len git vi nang)
 *.pt
 !models/.gitkeep
 
-# Bộ dữ liệu ảnh
+# Bo du lieu anh
 data/images/
 data/labels/
 
-# Hệ điều hành / trình soạn thảo
+# He dieu hanh / trinh soan thao
 .DS_Store
 Thumbs.db
 .vscode/
