@@ -2,42 +2,37 @@
 # Cau hinh bo du lieu cho train.py va evaluate.py
 # (chu thich de khong dau de moi cong cu deu doc duoc, khong lo loi bang ma)
 #
-# Cau truc thu muc can chuan bi (xem README muc 6):
+# Cau truc thu muc can chuan bi (xem README muc 7):
 #   data/
 #     images/train/anh001.jpg ...      labels/train/anh001.txt ...
 #     images/val/anh900.jpg  ...       labels/val/anh900.txt  ...
 #
 # Moi tep .txt la nhan cua anh cung ten, moi dong mot vat the:
 #   <id_lop> <x_tam> <y_tam> <chieu_rong> <chieu_cao>      (gia tri 0-1)
+#
+# LUU Y: ten lop duoi day trung voi khoa trong NHOM_NOI_THAT cua nhan_dien.py,
+# nho vay mo hinh tu huan luyen cung duoc dich sang tieng Viet tu dong.
 # ============================================================================
 
 path: .            # thu muc goc, tinh tu vi tri cua tep yaml nay
 train: images/train
 val: images/val
 
-# Danh sach lop. 16 lop dau giu nguyen ten COCO de tan dung mo hinh co san,
-# 7 lop cuoi la phan bo sung ma COCO khong co - day la gia tri them vao cua bai.
 names:
-  0: bench
-  1: chair
-  2: couch
-  3: potted plant
-  4: bed
-  5: dining table
-  6: toilet
-  7: tv
-  8: microwave
-  9: oven
-  10: toaster
-  11: sink
-  12: refrigerator
-  13: book
-  14: clock
-  15: vase
-  16: wardrobe
-  17: desk
-  18: lamp
-  19: shelf
-  20: mirror
-  21: curtain
-  22: carpet
+  0: table
+  1: desk
+  2: coffee table
+  3: dining table
+  4: chair
+  5: stool
+  6: bench
+  7: couch
+  8: bed
+  9: wardrobe
+  10: cabinetry
+  11: cupboard
+  12: chest of drawers
+  13: nightstand
+  14: drawer
+  15: shelf
+  16: bookcase

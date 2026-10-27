@@ -1,19 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-nhan_dien.py — Phần lõi của chương trình nhận diện đồ nội thất.
+nhan_dien.py — Phần lõi của phần mềm NHẬN DIỆN ĐỒ NỘI THẤT.
 
-Tách riêng khỏi giao diện để:
-  * app.py (giao diện Tkinter), detect_image.py (dòng lệnh) và evaluate.py
-    dùng chung một bộ mã, không viết trùng;
-  * có thể kiểm thử phần lõi mà không cần mở cửa sổ.
+Tách riêng khỏi giao diện để app.py, detect_image.py và evaluate.py dùng chung
+một bộ mã, đồng thời kiểm thử được phần xử lý mà không cần mở cửa sổ.
+
+Điểm quan trọng: chương trình CHỈ nhận diện đồ nội thất. Việc lọc được làm hai
+lớp — lọc ngay khi gọi mô hình (tham số classes) và lọc lại theo tên lớp sau khi
+có kết quả — nên không có vật thể nào ngoài danh mục lọt ra ngoài.
 """
 
 from __future__ import annotations
 
 import os
+import time
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Dict, List, Optional, Sequence
 
 import cv2
 import numpy as np
@@ -22,78 +25,124 @@ from PIL import Image, ImageDraw, ImageFont
 # ============================================================================
 # 1. DANH MỤC ĐỒ NỘI THẤT
 # ============================================================================
-# ID lớp theo bộ dữ liệu COCO mà mô hình YOLO được huấn luyện sẵn.
-# Chỉ giữ lại những lớp thuộc nhóm đồ đạc trong nhà.
-CLASS_NOI_THAT: List[int] = [
-    13,  # bench         - ghế băng
-    56,  # chair         - ghế
-    57,  # couch         - ghế sofa
-    58,  # potted plant  - chậu cây
-    59,  # bed           - giường
-    60,  # dining table  - bàn ăn
-    61,  # toilet        - bồn cầu
-    62,  # tv            - tivi
-    68,  # microwave     - lò vi sóng
-    69,  # oven          - lò nướng
-    70,  # toaster       - máy nướng bánh mì
-    71,  # sink          - bồn rửa
-    72,  # refrigerator  - tủ lạnh
-    73,  # book          - sách
-    74,  # clock         - đồng hồ
-    75,  # vase          - bình hoa
-]
+# Khoá là tên lớp của mô hình (viết thường). Giá trị là tên tiếng Việt.
+# Gộp cả tên của hai bộ dữ liệu:
+#   * COCO            - 80 lớp, nhận diện rất chính xác nhưng KHÔNG có tủ, kệ,
+#                       bàn làm việc, ngăn kéo…
+#   * Open Images V7  - 601 lớp, có đầy đủ tủ quần áo, tủ bếp, kệ sách, ngăn kéo,
+#                       bàn trà, bàn làm việc, tủ đầu giường…
 
-TEN_TIENG_VIET = {
-    "bench": "ghế băng",
-    "chair": "ghế",
-    "couch": "ghế sofa",
-    "potted plant": "chậu cây",
-    "bed": "giường",
-    "dining table": "bàn ăn",
-    "toilet": "bồn cầu",
-    "tv": "tivi",
-    "microwave": "lò vi sóng",
-    "oven": "lò nướng",
-    "toaster": "máy nướng bánh mì",
-    "sink": "bồn rửa",
-    "refrigerator": "tủ lạnh",
-    "book": "sách",
-    "clock": "đồng hồ",
-    "vase": "bình hoa",
-    # Các lớp tự huấn luyện thêm (nếu có) đặt tiếp ở đây
-    "wardrobe": "tủ quần áo",
+# --- Nhóm 1: ĐỒ NỘI THẤT (luôn luôn nhận diện) ---------------------------
+NHOM_NOI_THAT: Dict[str, str] = {
+    # Bàn
+    "table": "bàn",
     "desk": "bàn làm việc",
-    "lamp": "đèn",
+    "coffee table": "bàn trà",
+    "kitchen & dining room table": "bàn ăn",
+    "dining table": "bàn ăn",
+    # Ghế
+    "chair": "ghế",
+    "stool": "ghế đẩu",
+    "bench": "ghế băng",
+    "couch": "ghế sofa",
+    "loveseat": "ghế sofa đôi",
+    "studio couch": "ghế sofa dài",
+    "sofa bed": "ghế sofa giường",
+    # Giường
+    "bed": "giường",
+    "infant bed": "giường cũi em bé",
+    # Tủ
+    "wardrobe": "tủ quần áo",
+    "cabinetry": "tủ",
+    "cupboard": "tủ chén",
+    "bathroom cabinet": "tủ phòng tắm",
+    "chest of drawers": "tủ ngăn kéo",
+    "filing cabinet": "tủ hồ sơ",
+    "nightstand": "tủ đầu giường",
+    "drawer": "ngăn kéo",
+    # Kệ
     "shelf": "kệ",
-    "mirror": "gương",
-    "curtain": "rèm cửa",
-    "carpet": "thảm",
+    "bookcase": "kệ sách",
+    "wine rack": "kệ rượu",
 }
 
+# --- Nhóm 2: THIẾT BỊ VÀ ĐỒ TRANG TRÍ (tuỳ chọn, mặc định TẮT) -----------
+NHOM_THIET_BI: Dict[str, str] = {
+    "television": "tivi",
+    "tv": "tivi",
+    "refrigerator": "tủ lạnh",
+    "oven": "lò nướng",
+    "microwave oven": "lò vi sóng",
+    "microwave": "lò vi sóng",
+    "toaster": "máy nướng bánh mì",
+    "sink": "bồn rửa",
+    "toilet": "bồn cầu",
+    "bathtub": "bồn tắm",
+    "lamp": "đèn",
+    "mirror": "gương",
+    "curtain": "rèm cửa",
+    "pillow": "gối",
+    "vase": "bình hoa",
+    "houseplant": "chậu cây",
+    "potted plant": "chậu cây",
+    "clock": "đồng hồ",
+    "wall clock": "đồng hồ treo tường",
+    "alarm clock": "đồng hồ báo thức",
+    "ceiling fan": "quạt trần",
+    "mechanical fan": "quạt",
+}
 
-def dich_nhan(ten_tieng_anh: str) -> str:
-    """Dịch tên lớp sang tiếng Việt; không có trong từ điển thì giữ nguyên."""
-    return TEN_TIENG_VIET.get(ten_tieng_anh.lower(), ten_tieng_anh)
+# Lớp "Furniture" của Open Images là lớp cha chung chung, bật lên sẽ vẽ chồng
+# khung lên mọi món đồ nên cố ý KHÔNG đưa vào danh mục.
+
+
+def bang_ten(kem_thiet_bi: bool = False) -> Dict[str, str]:
+    """Danh mục đang áp dụng, tuỳ theo có kèm nhóm thiết bị/trang trí hay không."""
+    bang = dict(NHOM_NOI_THAT)
+    if kem_thiet_bi:
+        bang.update(NHOM_THIET_BI)
+    return bang
+
+
+def ten_viet(ten_lop: str, kem_thiet_bi: bool = True) -> Optional[str]:
+    """Trả về tên tiếng Việt, hoặc None nếu lớp đó không thuộc danh mục nội thất."""
+    return bang_ten(kem_thiet_bi).get(ten_lop.strip().lower())
 
 
 # ============================================================================
-# 2. PHÔNG CHỮ HỖ TRỢ TIẾNG VIỆT
+# 2. BẢNG MÀU
 # ============================================================================
-# LỖI CŨ: chỉ trỏ cứng vào "C:/Windows/Fonts/arial.ttf"; máy khác không có thì
-# rơi về ImageFont.load_default() — phông này KHÔNG vẽ được dấu tiếng Việt.
-# CÁCH SỬA: dò lần lượt các phông Unicode thông dụng của Windows / macOS / Linux.
-CAC_PHONG_UNG_VIEN = [
+# Màu được chọn sẵn cho dễ nhìn và tương phản tốt với nền ảnh, thay vì sinh màu
+# ngẫu nhiên. Mỗi tên vật thể luôn nhận đúng một màu cố định.
+BANG_MAU: Sequence[tuple] = (
+    (239, 68, 68), (59, 130, 246), (16, 185, 129), (245, 158, 11),
+    (168, 85, 247), (236, 72, 153), (20, 184, 166), (249, 115, 22),
+    (99, 102, 241), (132, 204, 22), (6, 182, 212), (217, 70, 239),
+    (234, 179, 8), (14, 165, 233), (34, 197, 94), (244, 63, 94),
+)
+
+
+def mau_cua(ten: str) -> tuple:
+    """Màu cố định cho một tên vật thể (cùng tên thì luôn cùng màu)."""
+    tong = sum((i + 1) * ord(c) for i, c in enumerate(ten))
+    return BANG_MAU[tong % len(BANG_MAU)]
+
+
+# ============================================================================
+# 3. PHÔNG CHỮ HỖ TRỢ TIẾNG VIỆT
+# ============================================================================
+CAC_PHONG_UNG_VIEN = (
+    "C:/Windows/Fonts/segoeuib.ttf",
+    "C:/Windows/Fonts/arialbd.ttf",
     "C:/Windows/Fonts/arial.ttf",
-    "C:/Windows/Fonts/segoeui.ttf",
-    "C:/Windows/Fonts/tahoma.ttf",
+    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
     "/System/Library/Fonts/Supplemental/Arial.ttf",
-    "/Library/Fonts/Arial.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-    "/usr/share/fonts/TTF/DejaVuSans.ttf",
-]
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+)
 
-_bo_nho_phong: dict = {}       # cache theo cỡ chữ, tránh mở lại tệp phông mỗi lần vẽ
+_bo_nho_phong: dict = {}
 
 
 def _tim_tep_phong() -> Optional[str]:
@@ -106,211 +155,296 @@ def _tim_tep_phong() -> Optional[str]:
 TEP_PHONG = _tim_tep_phong()
 
 
-def lay_phong(co_chu: int) -> ImageFont.ImageFont:
-    """Trả về phông chữ theo cỡ, có nhớ đệm. Không tìm được phông Unicode nào
-    thì dùng phông mặc định (chấp nhận mất dấu) để chương trình vẫn chạy."""
-    if co_chu in _bo_nho_phong:
-        return _bo_nho_phong[co_chu]
-    try:
-        phong = ImageFont.truetype(TEP_PHONG, co_chu) if TEP_PHONG else ImageFont.load_default()
-    except Exception:
-        phong = ImageFont.load_default()
-    _bo_nho_phong[co_chu] = phong
-    return phong
+def lay_phong(co_chu: int):
+    """Phông chữ theo cỡ, có nhớ đệm để không mở lại tệp mỗi lần vẽ."""
+    if co_chu not in _bo_nho_phong:
+        try:
+            _bo_nho_phong[co_chu] = (
+                ImageFont.truetype(TEP_PHONG, co_chu) if TEP_PHONG else ImageFont.load_default()
+            )
+        except Exception:
+            _bo_nho_phong[co_chu] = ImageFont.load_default()
+    return _bo_nho_phong[co_chu]
 
 
-def co_chu_theo_anh(chieu_rong: int, chieu_cao: int) -> int:
-    """LỖI CŨ: cỡ chữ cố định 28px nên ảnh lớn thì chữ li ti, ảnh nhỏ thì chữ
-    che kín vật thể. CÁCH SỬA: tính cỡ chữ theo cạnh lớn của ảnh."""
-    canh_lon = max(chieu_rong, chieu_cao)
-    return int(min(48, max(14, canh_lon / 38)))
-
-
-def mau_theo_class(cls_id: int) -> tuple:
-    """Sinh màu RGB riêng, cố định cho từng lớp (dùng tỉ lệ vàng để màu tản đều)."""
-    import colorsys
-    hue = (cls_id * 0.61803398875) % 1.0
-    r, g, b = colorsys.hsv_to_rgb(hue, 0.85, 0.95)
-    return (int(r * 255), int(g * 255), int(b * 255))
+def co_chu_theo_anh(rong: int, cao: int) -> int:
+    """Cỡ chữ tính theo cạnh lớn của ảnh, để nhãn không quá to cũng không quá bé."""
+    return int(min(44, max(15, max(rong, cao) / 42)))
 
 
 # ============================================================================
-# 3. ĐỌC ẢNH AN TOÀN
+# 4. ĐỌC ẢNH AN TOÀN
 # ============================================================================
 def doc_anh(duong_dan: str) -> np.ndarray:
-    """Đọc ảnh trả về mảng BGR.
+    """Đọc ảnh thành mảng BGR.
 
-    Dùng np.fromfile + cv2.imdecode thay cho cv2.imread để đọc được cả đường dẫn
-    có dấu tiếng Việt hoặc khoảng trắng trên Windows (cv2.imread hay trả về None
-    trong những trường hợp này).
+    Dùng np.fromfile + cv2.imdecode thay cho cv2.imread để mở được cả đường dẫn
+    có dấu tiếng Việt trên Windows (cv2.imread thường trả về None trong trường
+    hợp này).
     """
     if not os.path.isfile(duong_dan):
-        raise FileNotFoundError(f"Không tìm thấy tệp ảnh: {duong_dan}")
-    try:
-        du_lieu = np.fromfile(duong_dan, dtype=np.uint8)
-    except OSError as loi:
-        raise OSError(f"Không đọc được tệp: {duong_dan}") from loi
+        raise FileNotFoundError(f"Không tìm thấy tệp ảnh:\n{duong_dan}")
+    du_lieu = np.fromfile(duong_dan, dtype=np.uint8)
     if du_lieu.size == 0:
-        raise ValueError(f"Tệp rỗng: {duong_dan}")
+        raise ValueError(f"Tệp rỗng: {os.path.basename(duong_dan)}")
     anh = cv2.imdecode(du_lieu, cv2.IMREAD_COLOR)
     if anh is None:
         raise ValueError(
-            f"Tệp không phải ảnh hợp lệ hoặc định dạng không hỗ trợ: {os.path.basename(duong_dan)}"
+            f"Không đọc được ảnh «{os.path.basename(duong_dan)}».\n"
+            "Tệp có thể bị hỏng hoặc không phải định dạng ảnh được hỗ trợ."
         )
     return anh
 
 
 # ============================================================================
-# 4. KẾT QUẢ NHẬN DIỆN
+# 5. KẾT QUẢ
 # ============================================================================
 @dataclass
 class VatThe:
-    ten_en: str
     ten_vi: str
+    ten_en: str
     do_tin_cay: float
-    hop: tuple          # (x1, y1, x2, y2)
-    cls_id: int
+    hop: tuple            # (x1, y1, x2, y2)
+    nguon: str = ""       # mô hình nào tìm ra
+
+    @property
+    def dien_tich(self) -> int:
+        x1, y1, x2, y2 = self.hop
+        return max(0, x2 - x1) * max(0, y2 - y1)
+
+    @property
+    def mau(self) -> tuple:
+        return mau_cua(self.ten_vi)
 
 
 @dataclass
 class KetQua:
-    anh_da_ve: Image.Image
+    anh_bgr: np.ndarray                       # ảnh gốc, chưa vẽ gì
     danh_sach: List[VatThe] = field(default_factory=list)
+    giay_xu_ly: float = 0.0
+    ten_tep: str = ""
 
     @property
     def thong_ke(self) -> Counter:
-        """Đếm số lượng theo từng loại đồ vật."""
         return Counter(v.ten_vi for v in self.danh_sach)
+
+    @property
+    def do_tin_cay_tb(self) -> float:
+        if not self.danh_sach:
+            return 0.0
+        return sum(v.do_tin_cay for v in self.danh_sach) / len(self.danh_sach)
 
     def tom_tat(self) -> str:
         if not self.danh_sach:
-            return "Không phát hiện đồ nội thất nào trong ảnh."
-        phan = [f"{ten} x{sl}" if sl > 1 else ten for ten, sl in self.thong_ke.most_common()]
-        return f"Phát hiện {len(self.danh_sach)} vật thể: " + ", ".join(phan)
+            return "Không tìm thấy đồ nội thất nào trong ảnh."
+        phan = [f"{t} x{s}" if s > 1 else t for t, s in self.thong_ke.most_common()]
+        return f"Tìm thấy {len(self.danh_sach)} món: " + ", ".join(phan)
+
+    def ve(self, nhan_manh: Optional[int] = None) -> Image.Image:
+        """Vẽ kết quả lên ảnh. nhan_manh là chỉ số vật thể cần làm nổi bật."""
+        return ve_ket_qua(self.anh_bgr, self.danh_sach, nhan_manh)
 
 
 # ============================================================================
-# 5. VẼ KHUNG VÀ NHÃN TIẾNG VIỆT
+# 6. VẼ KẾT QUẢ
 # ============================================================================
-def ve_ket_qua(anh_bgr: np.ndarray, danh_sach: List[VatThe]) -> Image.Image:
-    """Vẽ khung chữ nhật và nhãn tiếng Việt lên ảnh bằng PIL.
+def ve_ket_qua(anh_bgr: np.ndarray, danh_sach: List[VatThe],
+               nhan_manh: Optional[int] = None) -> Image.Image:
+    """Vẽ khung và nhãn tiếng Việt lên ảnh.
 
     Dùng PIL chứ không dùng cv2.putText vì cv2.putText không in được chữ có dấu.
+    Khung được tô màu mờ bên trong, nhãn nằm trong một ô bo góc để dễ đọc trên
+    mọi nền ảnh.
     """
-    anh_pil = Image.fromarray(cv2.cvtColor(anh_bgr, cv2.COLOR_BGR2RGB))
-    ve = ImageDraw.Draw(anh_pil)
+    nen = Image.fromarray(cv2.cvtColor(anh_bgr, cv2.COLOR_BGR2RGB)).convert("RGBA")
+    rong, cao = nen.size
 
-    rong, cao = anh_pil.size
+    lop_ve = Image.new("RGBA", nen.size, (0, 0, 0, 0))
+    ve = ImageDraw.Draw(lop_ve)
+
     co_chu = co_chu_theo_anh(rong, cao)
     phong = lay_phong(co_chu)
-    do_day_vien = max(2, round(max(rong, cao) / 500))
-    dem = max(3, co_chu // 5)
+    day_vien = max(2, round(max(rong, cao) / 420))
+    dem = max(4, co_chu // 4)
 
-    for vat in danh_sach:
+    for i, vat in enumerate(danh_sach):
         x1, y1, x2, y2 = vat.hop
-        mau = mau_theo_class(vat.cls_id)
-        nhan = f"{vat.ten_vi} {vat.do_tin_cay:.0%}"
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(rong, x2), min(cao, y2)
+        if x2 <= x1 or y2 <= y1:
+            continue
 
-        ve.rectangle([x1, y1, x2, y2], outline=mau, width=do_day_vien)
+        noi_bat = (nhan_manh is None) or (i == nhan_manh)
+        mau = vat.mau
+        do_dam = 255 if noi_bat else 90
+        ve.rectangle([x1, y1, x2, y2], fill=mau + (54 if noi_bat else 18,))
+        ve.rectangle([x1, y1, x2, y2], outline=mau + (do_dam,),
+                     width=day_vien * (2 if (nhan_manh is not None and noi_bat) else 1))
 
-        khung_chu = ve.textbbox((0, 0), nhan, font=phong)
-        rong_chu = khung_chu[2] - khung_chu[0]
-        cao_chu = khung_chu[3] - khung_chu[1]
+        if not noi_bat:
+            continue
 
-        # Nhãn mặc định nằm phía trên khung; nếu chạm mép trên thì lật xuống dưới
-        if y1 - cao_chu - 2 * dem >= 0:
-            y_nen = y1 - cao_chu - 2 * dem
-        else:
-            y_nen = y1
-        # Không để nhãn tràn ra khỏi mép phải
-        x_nen = min(x1, max(0, rong - rong_chu - 2 * dem))
+        nhan = f"{vat.ten_vi}  {vat.do_tin_cay:.0%}"
+        khung = ve.textbbox((0, 0), nhan, font=phong)
+        rong_chu, cao_chu = khung[2] - khung[0], khung[3] - khung[1]
+        rong_o, cao_o = rong_chu + 2 * dem, cao_chu + 2 * dem
 
-        ve.rectangle(
-            [x_nen, y_nen, x_nen + rong_chu + 2 * dem, y_nen + cao_chu + 2 * dem],
-            fill=mau,
-        )
-        ve.text((x_nen + dem, y_nen + dem - khung_chu[1]), nhan, font=phong, fill=(255, 255, 255))
+        # Nhãn nằm trên khung; chạm mép trên thì lật xuống, chạm mép phải thì dịch vào
+        y_o = y1 - cao_o - 2 if y1 - cao_o - 2 >= 0 else y1 + 2
+        x_o = min(x1, max(0, rong - rong_o))
 
-    return anh_pil
+        ve.rounded_rectangle([x_o, y_o, x_o + rong_o, y_o + cao_o],
+                             radius=max(3, dem // 2), fill=mau + (235,))
+        ve.text((x_o + dem - khung[0], y_o + dem - khung[1]), nhan,
+                font=phong, fill=(255, 255, 255, 255))
+
+    return Image.alpha_composite(nen, lop_ve).convert("RGB")
 
 
 # ============================================================================
-# 6. BỘ NHẬN DIỆN
+# 7. BỘ NHẬN DIỆN
 # ============================================================================
+# Mỗi chế độ là một danh sách mô hình sẽ chạy. Chế độ "ket_hop" chạy cả hai rồi
+# gộp kết quả, cho số món tìm được nhiều nhất.
+CHE_DO = {
+    "oiv7": {
+        "ten": "Đầy đủ đồ nội thất (Open Images V7)",
+        "mo_ta": "Nhận được tủ quần áo, tủ bếp, kệ sách, ngăn kéo, bàn làm việc…",
+        "models": ["yolov8m-oiv7.pt"],
+    },
+    "coco": {
+        "ten": "Chính xác cao (COCO)",
+        "mo_ta": "Rất chắc chắn với ghế, sofa, giường, bàn ăn — nhưng không biết tủ, kệ.",
+        "models": ["yolov8m.pt"],
+    },
+    "ket_hop": {
+        "ten": "Kết hợp cả hai (tốt nhất, chậm hơn)",
+        "mo_ta": "Chạy lần lượt hai mô hình rồi gộp kết quả, tìm được nhiều món nhất.",
+        "models": ["yolov8m-oiv7.pt", "yolov8m.pt"],
+    },
+    "tu_huan_luyen": {
+        "ten": "Mô hình tự huấn luyện (models/best.pt)",
+        "mo_ta": "Dùng sau khi đã chạy train.py trên bộ ảnh riêng.",
+        "models": [os.path.join("models", "best.pt")],
+    },
+}
+CHE_DO_MAC_DINH = "oiv7"
+
+
+def _iou(a: tuple, b: tuple) -> float:
+    ax1, ay1, ax2, ay2 = a
+    bx1, by1, bx2, by2 = b
+    x1, y1 = max(ax1, bx1), max(ay1, by1)
+    x2, y2 = min(ax2, bx2), min(ay2, by2)
+    giao = max(0, x2 - x1) * max(0, y2 - y1)
+    if giao == 0:
+        return 0.0
+    dt_a = max(0, ax2 - ax1) * max(0, ay2 - ay1)
+    dt_b = max(0, bx2 - bx1) * max(0, by2 - by1)
+    return giao / float(dt_a + dt_b - giao)
+
+
+def gop_trung_lap(danh_sach: List[VatThe]) -> List[VatThe]:
+    """Bỏ các khung chỉ cùng một món đồ nhưng bị hai mô hình cùng tìm ra.
+
+    Cùng tên  -> trùng nhau trên 50 % thì bỏ cái có độ tin cậy thấp hơn.
+    Khác tên  -> phải trùng trên 80 % mới bỏ (ví dụ "bàn" và "bàn ăn").
+    """
+    con_lai: List[VatThe] = []
+    for vat in sorted(danh_sach, key=lambda v: v.do_tin_cay, reverse=True):
+        trung = False
+        for da_giu in con_lai:
+            nguong = 0.5 if da_giu.ten_vi == vat.ten_vi else 0.8
+            if _iou(da_giu.hop, vat.hop) > nguong:
+                trung = True
+                break
+        if not trung:
+            con_lai.append(vat)
+    return con_lai
+
+
 class BoNhanDien:
-    """Bọc mô hình YOLO lại cho gọn. Mô hình chỉ được nạp khi dùng lần đầu."""
+    """Bọc một hoặc hai mô hình YOLO lại cho gọn. Mô hình chỉ nạp khi cần dùng."""
 
-    def __init__(self, ten_model: str = "yolov8m.pt"):
-        self.ten_model = ten_model
-        self._model = None
+    def __init__(self, che_do: str = CHE_DO_MAC_DINH):
+        self.che_do = che_do if che_do in CHE_DO else CHE_DO_MAC_DINH
+        self._kho_model: dict = {}
 
-    @property
-    def model(self):
-        if self._model is None:
-            from ultralytics import YOLO      # nhập muộn để mở app nhanh hơn
-            self._model = YOLO(self.ten_model)
-        return self._model
+    # ---- nạp mô hình ----
+    def _lay_model(self, ten_tep: str):
+        if ten_tep not in self._kho_model:
+            from ultralytics import YOLO          # nhập muộn cho app mở nhanh
+            self._kho_model[ten_tep] = YOLO(ten_tep)
+        return self._kho_model[ten_tep]
 
-    def doi_model(self, ten_model: str) -> None:
-        if ten_model != self.ten_model:
-            self.ten_model = ten_model
-            self._model = None
+    def doi_che_do(self, che_do: str) -> None:
+        if che_do in CHE_DO:
+            self.che_do = che_do
 
-    @property
-    def danh_sach_lop(self) -> dict:
-        return self.model.names
+    def nap_truoc(self) -> None:
+        """Nạp sẵn mô hình của chế độ hiện tại (dùng để hiện thông báo chờ)."""
+        for ten_tep in CHE_DO[self.che_do]["models"]:
+            self._lay_model(ten_tep)
 
-    def _loc_lop(self) -> Optional[List[int]]:
-        """Chỉ lọc theo danh sách COCO khi mô hình đúng là mô hình 80 lớp của COCO.
-        Mô hình tự huấn luyện có bộ lớp riêng nên không áp dụng bộ lọc này."""
-        ten = self.danh_sach_lop
-        if len(ten) == 80 and ten.get(56) == "chair":
-            return CLASS_NOI_THAT
-        return None
+    @staticmethod
+    def _ids_noi_that(ten_lop: dict, bang: Dict[str, str]) -> Optional[List[int]]:
+        """Tìm chỉ số các lớp thuộc danh mục nội thất trong một mô hình cụ thể.
 
+        Lọc theo TÊN chứ không theo số thứ tự, nhờ vậy dùng được cho cả mô hình
+        COCO (80 lớp), Open Images V7 (601 lớp) lẫn mô hình tự huấn luyện.
+        """
+        ids = [i for i, ten in ten_lop.items() if str(ten).strip().lower() in bang]
+        return ids or None
+
+    # ---- nhận diện ----
     def nhan_dien(
         self,
         duong_dan_anh: str,
-        nguong_tin_cay: float = 0.5,
-        nguong_iou: float = 0.45,
+        nguong_tin_cay: float = 0.40,
+        kem_thiet_bi: bool = False,
         co_anh: int = 960,
         dung_tta: bool = False,
     ) -> KetQua:
-        """Nhận diện đồ nội thất trong một ảnh.
-
-        nguong_tin_cay : chỉ giữ vật thể có độ tin cậy từ mức này trở lên
-        nguong_iou     : ngưỡng gộp các khung trùng nhau (NMS)
-        co_anh         : kích thước đưa vào mạng; lớn hơn = bắt vật nhỏ tốt hơn
-        dung_tta       : bật tăng cường lúc dự đoán, chính xác hơn nhưng chậm hơn
-        """
+        bat_dau = time.perf_counter()
         anh_bgr = doc_anh(duong_dan_anh)
+        bang = bang_ten(kem_thiet_bi)
 
-        ket_qua_yolo = self.model.predict(
-            source=anh_bgr,
-            classes=self._loc_lop(),
-            conf=nguong_tin_cay,
-            iou=nguong_iou,
-            imgsz=co_anh,
-            augment=dung_tta,
-            verbose=False,
-        )[0]
+        tat_ca: List[VatThe] = []
+        for ten_tep in CHE_DO[self.che_do]["models"]:
+            model = self._lay_model(ten_tep)
+            ten_lop = model.names
 
-        danh_sach: List[VatThe] = []
-        ten_lop = self.danh_sach_lop
-        for hop in ket_qua_yolo.boxes:
-            cls_id = int(hop.cls[0])
-            ten_en = ten_lop[cls_id]
-            danh_sach.append(
-                VatThe(
-                    ten_en=ten_en,
-                    ten_vi=dich_nhan(ten_en),
-                    do_tin_cay=float(hop.conf[0]),
-                    hop=tuple(int(v) for v in hop.xyxy[0]),
-                    cls_id=cls_id,
+            ket_qua = model.predict(
+                source=anh_bgr,
+                classes=self._ids_noi_that(ten_lop, bang),
+                conf=nguong_tin_cay,
+                iou=0.45,
+                imgsz=co_anh,
+                augment=dung_tta,
+                verbose=False,
+            )[0]
+
+            for hop in ket_qua.boxes:
+                ten_en = str(ten_lop[int(hop.cls[0])])
+                ten_vi = bang.get(ten_en.strip().lower())
+                if ten_vi is None:
+                    continue              # lớp thứ hai: chắc chắn không lọt vật lạ
+                tat_ca.append(
+                    VatThe(
+                        ten_vi=ten_vi,
+                        ten_en=ten_en,
+                        do_tin_cay=float(hop.conf[0]),
+                        hop=tuple(int(v) for v in hop.xyxy[0]),
+                        nguon=os.path.basename(ten_tep),
+                    )
                 )
-            )
 
-        # Sắp xếp theo độ tin cậy giảm dần cho dễ đọc
+        danh_sach = gop_trung_lap(tat_ca)
         danh_sach.sort(key=lambda v: v.do_tin_cay, reverse=True)
 
-        return KetQua(anh_da_ve=ve_ket_qua(anh_bgr, danh_sach), danh_sach=danh_sach)
+        return KetQua(
+            anh_bgr=anh_bgr,
+            danh_sach=danh_sach,
+            giay_xu_ly=time.perf_counter() - bat_dau,
+            ten_tep=os.path.basename(duong_dan_anh),
+        )
