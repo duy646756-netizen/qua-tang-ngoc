@@ -47,6 +47,8 @@ def main() -> int:
     bo_doc.add_argument("--kem-thiet-bi", dest="kem_thiet_bi", action="store_true",
                         help="nhận thêm tivi, tủ lạnh, đèn, gương, rèm, chậu cây…")
     bo_doc.add_argument("--tta", action="store_true", help="chế độ chính xác cao (chậm hơn)")
+    bo_doc.add_argument("--khong-them-vien", dest="khong_them_vien", action="store_true",
+                        help="tắt việc chạy thêm lượt trên ảnh có viền (nhanh hơn, kém chính xác hơn với ảnh sản phẩm)")
     tham_so = bo_doc.parse_args()
 
     try:
@@ -78,6 +80,7 @@ def main() -> int:
                 kem_thiet_bi=tham_so.kem_thiet_bi,
                 co_anh=tham_so.imgsz,
                 dung_tta=tham_so.tta,
+                them_vien_phu=not tham_so.khong_them_vien,
             )
         except Exception as loi:                      # noqa: BLE001
             print(f"  BỎ QUA — {loi}", file=sys.stderr)

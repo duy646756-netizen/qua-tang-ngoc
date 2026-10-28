@@ -175,10 +175,47 @@ python evaluate.py --model models/best.pt     # sau khi huấn luyện
 > càng cao càng tốt (trên 0,85 đã là rất khá) và nêu rõ trong báo cáo những
 > trường hợp mô hình còn sai.
 
-## 10. Hạn chế hiện tại
+## 10. Kết quả thử nghiệm thực tế
+
+Thử trên ba ảnh sản phẩm nội thất chụp trên nền trơn, chế độ *Kết hợp cả hai*,
+ngưỡng 40 %:
+
+| Ảnh | Kết quả | Nhận xét |
+|---|---|---|
+| Tủ quần áo 3 cánh | **tủ quần áo 48 %** | Đúng, khung bao sát món đồ |
+| Ghế sofa | **ghế sofa 95 %** | Đúng, độ tin cậy rất cao |
+| Bàn làm việc có hộc tủ | **tủ ngăn kéo 57 %** | Khoanh đúng cả cái bàn nhưng **gọi sai tên** |
+
+Nhận xét rút ra: chương trình **khoanh vùng chính xác cả 3/3 ảnh**, nhưng gọi
+đúng tên 2/3. Cái bàn làm việc bị gọi là "tủ ngăn kéo" vì phần hộc tủ bên phải
+chiếm tỉ trọng lớn, trong khi lớp *Desk* của bộ Open Images vốn yếu.
+
+Đây chính là lý do cần **huấn luyện tinh chỉnh** (mục 7): dạy thêm cho mô hình
+bằng ảnh bàn làm việc thật sẽ sửa được đúng loại lỗi này.
+
+### Vì sao phải chạy thêm lượt có viền
+
+Ảnh chụp sản phẩm thường để món đồ chiếm trọn khung hình, trong khi mô hình được
+huấn luyện trên ảnh cảnh thật nơi mỗi món chỉ chiếm một phần. Chương trình vì vậy
+chạy thêm hai lượt trên bản sao có thêm viền 25 % và 50 % rồi gộp kết quả:
+
+| Ảnh | Chỉ ảnh gốc | Có thêm lượt viền |
+|---|---|---|
+| Tủ quần áo | không nhận ra gì | tủ quần áo 48 % |
+| Bàn làm việc | không nhận ra gì | tủ ngăn kéo 57 % |
+| Ghế sofa | ghế sofa 88 % | ghế sofa 95 % |
+
+Đổi lại mỗi ảnh mất thêm khoảng 2–3 lần thời gian. Muốn nhanh hơn thì chạy dòng
+lệnh với `--khong-them-vien`.
+
+## 11. Hạn chế hiện tại
 
 - Chỉ xử lý **ảnh tĩnh**, chưa làm video và webcam.
 - Món bị che khuất nhiều, ảnh ngược sáng hoặc chụp quá gần vẫn dễ bị bỏ sót.
 - Bộ Open Images V7 nhận được nhiều loại tủ kệ hơn nhưng độ tin cậy trung bình
   thấp hơn COCO, nên ngưỡng mặc định để ở mức 40 %.
-- Chạy bằng CPU mất khoảng 1–3 giây mỗi ảnh (bật TTA hoặc chế độ kết hợp thì lâu hơn).
+- Chạy bằng CPU mất khoảng 1–3 giây mỗi ảnh (bật chế độ chính xác cao hoặc chế
+  độ kết hợp thì lâu hơn).
+- **Gọi tên chưa thật chuẩn với một số món:** bàn làm việc có hộc tủ dễ bị gọi là
+  "tủ ngăn kéo", tủ quần áo đôi khi bị gọi là "tủ chén". Khắc phục bằng cách huấn
+  luyện tinh chỉnh ở mục 7.

@@ -205,13 +205,15 @@ def doc_anh(duong_dan: str) -> np.ndarray:
 # chỉ còn chiếm phần giữa khung giúp mô hình nhận ra tốt hơn hẳn.
 #
 # Đo trên ba ảnh sản phẩm thật (tủ quần áo, ghế sofa, bàn làm việc):
-#   tủ quần áo  : không nhận ra  ->  tủ chén 48 % / tủ quần áo 48 %
-#   bàn làm việc: ngăn kéo 31 %  ->  tủ ngăn kéo 51 %
-#   ghế sofa    : 60 %           ->  59 % (gần như không đổi)
-TI_LE_VIEN = 0.25
+#   tủ quần áo  : không nhận ra gì  ->  tủ quần áo 48 %
+#   bàn làm việc: không nhận ra gì  ->  tủ ngăn kéo 57 %
+#   ghế sofa    : ghế sofa 88 %     ->  ghế sofa 95 %
+# Hai mức viền: mức 25 % đủ cho phần lớn ảnh, thêm mức 50 % giúp gọi đúng tên
+# những món bị chụp quá sát (ảnh tủ quần áo: "tủ chén 44 %" -> "tủ quần áo 48 %").
+CAC_TI_LE_VIEN = (0.25, 0.50)
 
 
-def them_vien(anh_bgr: np.ndarray, ti_le: float = TI_LE_VIEN):
+def them_vien(anh_bgr: np.ndarray, ti_le: float = 0.25):
     """Thêm viền quanh ảnh, lấy màu nền ở bốn góc cho tự nhiên.
 
     Trả về (ảnh mới, độ lệch x, độ lệch y) để quy toạ độ khung về ảnh gốc.
@@ -449,7 +451,7 @@ class BoNhanDien:
         # Mỗi lượt là một phiên bản của ảnh kèm độ lệch toạ độ của nó
         cac_luot = [(anh_bgr, 0, 0)]
         if them_vien_phu:
-            cac_luot.append(them_vien(anh_bgr))
+            cac_luot += [them_vien(anh_bgr, t) for t in CAC_TI_LE_VIEN]
 
         tat_ca: List[VatThe] = []
         for ten_tep in CHE_DO[self.che_do]["models"]:
