@@ -151,3 +151,68 @@ class ONhan(tk.Label):
         mau = "#%02x%02x%02x" % mau_rgb
         super().__init__(cha, text=f" {chu} ", bg=mau, fg="#ffffff",
                          font=(PH, 9, "bold"), padx=6, pady=3)
+
+
+# ============================================================================
+# CÁC Ô GIAO DIỆN NÂNG CAO
+# ============================================================================
+class NutDoan(tk.Frame):
+    """Dải nút chọn một trong nhiều mức (kiểu segmented control)."""
+
+    def __init__(self, cha: tk.Misc, cac_muc, chi_so_mac_dinh: int = 1, khi_doi=None):
+        super().__init__(cha, bg=VIEN, padx=1, pady=1)
+        self.khi_doi = khi_doi
+        self.gia_tri = cac_muc[chi_so_mac_dinh][1]
+        self._nut = []
+        trong = tk.Frame(self, bg="#eef2f8")
+        trong.pack(fill="x")
+        for i, (nhan, gia_tri) in enumerate(cac_muc):
+            o = tk.Label(trong, text=nhan, font=(PH, 9, "bold"), padx=10, pady=7,
+                         cursor="hand2", bg="#eef2f8", fg=CHU_MO)
+            o.pack(side="left", expand=True, fill="x")
+            o.bind("<Button-1>", lambda _e, k=i: self.chon(k))
+            self._nut.append((o, gia_tri))
+        self.chon(chi_so_mac_dinh, bao=False)
+
+    def chon(self, chi_so: int, bao: bool = True) -> None:
+        for i, (o, gia_tri) in enumerate(self._nut):
+            if i == chi_so:
+                o.config(bg=CHINH, fg="#ffffff")
+                self.gia_tri = gia_tri
+            else:
+                o.config(bg="#eef2f8", fg=CHU_MO)
+        if bao and callable(self.khi_doi):
+            self.khi_doi(self.gia_tri)
+
+
+class OAnhNho(tk.Frame):
+    """Một dòng trong danh sách ảnh: ảnh thu nhỏ + tên tệp + số món tìm được."""
+
+    def __init__(self, cha: tk.Misc, anh_tk, ten: str, khi_bam):
+        super().__init__(cha, bg=THE, padx=6, pady=5, cursor="hand2")
+        self.vien = tk.Frame(self, bg=THE, padx=2, pady=2)
+        self.vien.pack(fill="x")
+        trong = tk.Frame(self.vien, bg="#f6f8fc")
+        trong.pack(fill="x")
+
+        self.o_anh = tk.Label(trong, image=anh_tk, bg="#f6f8fc")
+        self.o_anh.image = anh_tk
+        self.o_anh.pack(side="left", padx=6, pady=6)
+
+        giua = tk.Frame(trong, bg="#f6f8fc")
+        giua.pack(side="left", fill="both", expand=True, padx=(2, 6))
+        self.o_ten = tk.Label(giua, text=ten, bg="#f6f8fc", fg=CHU,
+                              font=(PH, 9, "bold"), anchor="w")
+        self.o_ten.pack(fill="x")
+        self.o_trang_thai = tk.Label(giua, text="đang chờ…", bg="#f6f8fc",
+                                     fg=CHU_MO, font=(PH, 8), anchor="w")
+        self.o_trang_thai.pack(fill="x")
+
+        for o in (self, self.vien, trong, self.o_anh, giua, self.o_ten, self.o_trang_thai):
+            o.bind("<Button-1>", lambda _e: khi_bam())
+
+    def dat_trang_thai(self, chu: str, mau: str = CHU_MO) -> None:
+        self.o_trang_thai.config(text=chu, fg=mau)
+
+    def dat_chon(self, dang_chon: bool) -> None:
+        self.vien.config(bg=CHINH if dang_chon else THE)

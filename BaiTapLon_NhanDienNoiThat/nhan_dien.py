@@ -54,7 +54,7 @@ NHOM_NOI_THAT: Dict[str, str] = {
     # Tủ
     "wardrobe": "tủ quần áo",
     "cabinetry": "tủ",
-    "cupboard": "tủ chén",
+    "cupboard": "tủ",
     "bathroom cabinet": "tủ phòng tắm",
     "chest of drawers": "tủ ngăn kéo",
     "filing cabinet": "tủ hồ sơ",
