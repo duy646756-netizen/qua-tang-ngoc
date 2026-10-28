@@ -82,12 +82,23 @@ Không bắt buộc có card đồ hoạ; có GPU NVIDIA thì nhanh hơn khoản
 
 ### Giao diện
 
-```bash
-python app.py
-```
+**Bấm đúp tệp `chay.bat`** — lần đầu nó tự cài thư viện rồi mở phần mềm.
+Hoặc gõ `python app.py`.
 
-Chọn bộ nhận diện → chỉnh ngưỡng tin cậy → bấm **Chọn ảnh để nhận diện** →
-xem kết quả → **Lưu ảnh kết quả**.
+Cách dùng: chọn mức **Độ nhạy** → bấm **Chọn ảnh để nhận diện**
+(giữ **Ctrl** để chọn nhiều ảnh cùng lúc) → bấm từng ảnh ở cột phải để xem kết
+quả → **Lưu ảnh đang xem** hoặc **Lưu tất cả kết quả**.
+
+Ba mức độ nhạy:
+
+| Mức | Ngưỡng | Khi nào dùng |
+|---|---|---|
+| Nhạy | 25 % | Muốn bắt được nhiều món nhất, chấp nhận vài món sai |
+| Cân bằng | 40 % | Mức thường dùng |
+| Chắc chắn | 60 % | Chỉ báo món thật sự chắc |
+
+Không còn ô chọn mô hình hay ô tích nào khác: bên trong chương trình **luôn chạy
+cả hai mô hình rồi gộp kết quả**, nên lúc nào cũng ở mức chính xác cao nhất.
 
 ### Dòng lệnh
 
