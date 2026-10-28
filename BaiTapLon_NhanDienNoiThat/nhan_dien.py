@@ -196,6 +196,41 @@ def doc_anh(duong_dan: str) -> np.ndarray:
     return anh
 
 
+# ----------------------------------------------------------------------------
+# Thêm viền quanh ảnh
+# ----------------------------------------------------------------------------
+# Ảnh chụp sản phẩm (tủ, bàn, ghế trên nền trơn) thường chiếm trọn khung hình.
+# Mô hình lại được huấn luyện trên ảnh cảnh thật, nơi mỗi món chỉ chiếm một phần
+# khung, nên gặp ảnh sản phẩm là nó lúng túng. Thêm một viền quanh ảnh để món đồ
+# chỉ còn chiếm phần giữa khung giúp mô hình nhận ra tốt hơn hẳn.
+#
+# Đo trên ba ảnh sản phẩm thật (tủ quần áo, ghế sofa, bàn làm việc):
+#   tủ quần áo  : không nhận ra  ->  tủ chén 48 % / tủ quần áo 48 %
+#   bàn làm việc: ngăn kéo 31 %  ->  tủ ngăn kéo 51 %
+#   ghế sofa    : 60 %           ->  59 % (gần như không đổi)
+TI_LE_VIEN = 0.25
+
+
+def them_vien(anh_bgr: np.ndarray, ti_le: float = TI_LE_VIEN):
+    """Thêm viền quanh ảnh, lấy màu nền ở bốn góc cho tự nhiên.
+
+    Trả về (ảnh mới, độ lệch x, độ lệch y) để quy toạ độ khung về ảnh gốc.
+    """
+    cao, rong = anh_bgr.shape[:2]
+    day = int(max(cao, rong) * ti_le)
+    if day <= 0:
+        return anh_bgr, 0, 0
+    o = max(2, min(cao, rong) // 40)
+    bon_goc = np.concatenate([
+        anh_bgr[:o, :o].reshape(-1, 3), anh_bgr[:o, -o:].reshape(-1, 3),
+        anh_bgr[-o:, :o].reshape(-1, 3), anh_bgr[-o:, -o:].reshape(-1, 3),
+    ])
+    mau = [int(v) for v in np.median(bon_goc, axis=0)]
+    anh_moi = cv2.copyMakeBorder(anh_bgr, day, day, day, day,
+                                 cv2.BORDER_CONSTANT, value=mau)
+    return anh_moi, day, day
+
+
 # ============================================================================
 # 5. KẾT QUẢ
 # ============================================================================
@@ -402,42 +437,63 @@ class BoNhanDien:
         duong_dan_anh: str,
         nguong_tin_cay: float = 0.40,
         kem_thiet_bi: bool = False,
-        co_anh: int = 960,
+        co_anh: int = 640,
         dung_tta: bool = False,
+        them_vien_phu: bool = True,
     ) -> KetQua:
         bat_dau = time.perf_counter()
         anh_bgr = doc_anh(duong_dan_anh)
         bang = bang_ten(kem_thiet_bi)
+        cao_goc, rong_goc = anh_bgr.shape[:2]
+
+        # Mỗi lượt là một phiên bản của ảnh kèm độ lệch toạ độ của nó
+        cac_luot = [(anh_bgr, 0, 0)]
+        if them_vien_phu:
+            cac_luot.append(them_vien(anh_bgr))
 
         tat_ca: List[VatThe] = []
         for ten_tep in CHE_DO[self.che_do]["models"]:
             model = self._lay_model(ten_tep)
             ten_lop = model.names
+            ids = self._ids_noi_that(ten_lop, bang)
 
-            ket_qua = model.predict(
-                source=anh_bgr,
-                classes=self._ids_noi_that(ten_lop, bang),
-                conf=nguong_tin_cay,
-                iou=0.45,
-                imgsz=co_anh,
-                augment=dung_tta,
-                verbose=False,
-            )[0]
+            for anh_vao, lech_x, lech_y in cac_luot:
+                ket_qua = model.predict(
+                    source=anh_vao,
+                    classes=ids,
+                    conf=nguong_tin_cay,
+                    iou=0.45,
+                    imgsz=co_anh,
+                    augment=dung_tta,
+                    verbose=False,
+                )[0]
 
-            for hop in ket_qua.boxes:
-                ten_en = str(ten_lop[int(hop.cls[0])])
-                ten_vi = bang.get(ten_en.strip().lower())
-                if ten_vi is None:
-                    continue              # lớp thứ hai: chắc chắn không lọt vật lạ
-                tat_ca.append(
-                    VatThe(
-                        ten_vi=ten_vi,
-                        ten_en=ten_en,
-                        do_tin_cay=float(hop.conf[0]),
-                        hop=tuple(int(v) for v in hop.xyxy[0]),
-                        nguon=os.path.basename(ten_tep),
+                for hop in ket_qua.boxes:
+                    ten_en = str(ten_lop[int(hop.cls[0])])
+                    ten_vi = bang.get(ten_en.strip().lower())
+                    if ten_vi is None:
+                        continue          # lớp lọc thứ hai: không để lọt vật lạ
+                    x1, y1, x2, y2 = (int(v) for v in hop.xyxy[0])
+                    # Quy toạ độ về ảnh gốc rồi cắt cho nằm trong ảnh
+                    x1, x2 = x1 - lech_x, x2 - lech_x
+                    y1, y2 = y1 - lech_y, y2 - lech_y
+                    dt_truoc = max(1, (x2 - x1) * (y2 - y1))
+                    x1, y1 = max(0, x1), max(0, y1)
+                    x2, y2 = min(rong_goc, x2), min(cao_goc, y2)
+                    if x2 <= x1 or y2 <= y1:
+                        continue
+                    # Bỏ khung nằm chủ yếu ngoài ảnh gốc (do phần viền sinh ra)
+                    if (x2 - x1) * (y2 - y1) < 0.5 * dt_truoc:
+                        continue
+                    tat_ca.append(
+                        VatThe(
+                            ten_vi=ten_vi,
+                            ten_en=ten_en,
+                            do_tin_cay=float(hop.conf[0]),
+                            hop=(x1, y1, x2, y2),
+                            nguon=os.path.basename(ten_tep),
+                        )
                     )
-                )
 
         danh_sach = gop_trung_lap(tat_ca)
         danh_sach.sort(key=lambda v: v.do_tin_cay, reverse=True)
