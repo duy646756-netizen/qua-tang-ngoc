@@ -53,6 +53,11 @@ class UngDung:
         self._dung_trang_thai()
         self._dung_than()
 
+        # Nạp sẵn mô hình ngay khi mở chương trình. Nếu đợi đến lúc người dùng
+        # chọn ảnh mới nạp thì ảnh đầu tiên phải chờ thêm khoảng 10 giây.
+        self.san_sang = False
+        threading.Thread(target=self._nap_mo_hinh, daemon=True).start()
+
     # ================================================================== #
     # DỰNG GIAO DIỆN
     # ================================================================== #
@@ -218,6 +223,24 @@ class UngDung:
         self.o_ds_trong = tk.Label(self.khung_ds, text="Chưa chọn ảnh nào",
                                    bg=gd.THE, fg=gd.CHU_MO, font=(gd.PH, 9))
         self.o_ds_trong.pack(pady=14)
+
+    # ================================================================== #
+    # CHUẨN BỊ MÔ HÌNH
+    # ================================================================== #
+    def _nap_mo_hinh(self) -> None:
+        self.cua_so.after(0, lambda: self._bao(
+            "Đang chuẩn bị mô hình nhận diện… (lần đầu cần mạng để tải về)", gd.CHU))
+        try:
+            self.bo_nhan_dien.nap_truoc()
+            self.cua_so.after(0, lambda: self._bao(
+                "Sẵn sàng. Bấm « Chọn ảnh để nhận diện » để bắt đầu.", gd.XANH))
+        except Exception as loi:                            # noqa: BLE001
+            traceback.print_exc()
+            tb = str(loi)
+            self.cua_so.after(0, lambda: self._bao(
+                "Chưa tải được mô hình: " + tb[:90], gd.DO))
+        finally:
+            self.san_sang = True
 
     # ================================================================== #
     # SỰ KIỆN
@@ -472,6 +495,9 @@ def main() -> None:
     cua_so = tk.Tk()
     UngDung(cua_so)
     cua_so.mainloop()
+    # Thoát dứt khoát: các thư viện tính toán còn giữ luồng nền, nếu để Python
+    # tự dọn thì cửa sổ đã đóng mà tiến trình vẫn báo lỗi lằng nhằng.
+    os._exit(0)
 
 
 if __name__ == "__main__":
