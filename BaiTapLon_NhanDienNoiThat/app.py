@@ -232,8 +232,10 @@ class UngDung:
             "Đang chuẩn bị mô hình nhận diện… (lần đầu cần mạng để tải về)", gd.CHU))
         try:
             self.bo_nhan_dien.nap_truoc()
+            rieng = self.bo_nhan_dien.co_mo_hinh_rieng()
             self.cua_so.after(0, lambda: self._bao(
-                "Sẵn sàng. Bấm « Chọn ảnh để nhận diện » để bắt đầu.", gd.XANH))
+                "Sẵn sàng. Bấm « Chọn ảnh để nhận diện » để bắt đầu."
+                + (" (đang dùng kèm mô hình tự huấn luyện)" if rieng else ""), gd.XANH))
         except Exception as loi:                            # noqa: BLE001
             traceback.print_exc()
             tb = str(loi)

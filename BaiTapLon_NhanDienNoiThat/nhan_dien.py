@@ -418,9 +418,28 @@ class BoNhanDien:
         if che_do in CHE_DO:
             self.che_do = che_do
 
+    # ---- danh sách mô hình sẽ chạy ----
+    TEP_TU_HUAN_LUYEN = os.path.join("models", "best.pt")
+
+    def danh_sach_model(self) -> List[str]:
+        """Các mô hình sẽ chạy cho lần nhận diện này.
+
+        Nếu thư mục models có tệp best.pt (mô hình do người dùng tự huấn luyện)
+        thì tự động dùng kèm, không phải sửa dòng mã nào. Đặt lên đầu danh sách
+        để khi hai mô hình cùng tìm ra một món thì kết quả của nó được ưu tiên.
+        """
+        cac_tep = list(CHE_DO[self.che_do]["models"])
+        if (os.path.isfile(self.TEP_TU_HUAN_LUYEN)
+                and self.TEP_TU_HUAN_LUYEN not in cac_tep):
+            cac_tep.insert(0, self.TEP_TU_HUAN_LUYEN)
+        return cac_tep
+
+    def co_mo_hinh_rieng(self) -> bool:
+        return os.path.isfile(self.TEP_TU_HUAN_LUYEN)
+
     def nap_truoc(self) -> None:
-        """Nạp sẵn mô hình của chế độ hiện tại (dùng để hiện thông báo chờ)."""
-        for ten_tep in CHE_DO[self.che_do]["models"]:
+        """Nạp sẵn mô hình (dùng để hiện thông báo chờ lúc mở chương trình)."""
+        for ten_tep in self.danh_sach_model():
             self._lay_model(ten_tep)
 
     @staticmethod
@@ -454,7 +473,7 @@ class BoNhanDien:
             cac_luot += [them_vien(anh_bgr, t) for t in CAC_TI_LE_VIEN]
 
         tat_ca: List[VatThe] = []
-        for ten_tep in CHE_DO[self.che_do]["models"]:
+        for ten_tep in self.danh_sach_model():
             model = self._lay_model(ten_tep)
             ten_lop = model.names
             ids = self._ids_noi_that(ten_lop, bang)
